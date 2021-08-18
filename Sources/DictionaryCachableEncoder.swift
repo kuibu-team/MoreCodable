@@ -30,7 +30,7 @@ open class DictionaryCachableEncoder: DictionaryEncoder {
 
 // MARK: cache related
 
-public protocol DictionaryCachableCacheProtocol: class {
+public protocol DictionaryCachableCacheProtocol: AnyObject {
     var storage: [AnyHashable: Any] { get set }
 }
 
