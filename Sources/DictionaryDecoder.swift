@@ -13,6 +13,9 @@ open class DictionaryDecoder: Decoder {
     open var codingPath: [CodingKey]
     open var userInfo: [CodingUserInfoKey: Any] = [:]
     var storage = Storage()
+    
+    /// The strategy to use in decoding dates. Defaults to `.deferredToDate`.
+    open var dateDecodingStrategy: DateDecodingStrategy = .deferredToDate
 
     public init() {
         codingPath = []
@@ -44,6 +47,22 @@ open class DictionaryDecoder: Decoder {
     }
 
     private func unbox<T: Decodable>(_ value: Any, as type: T.Type) throws -> T {
+        
+        if T.self == Date.self || T.self == NSDate.self {
+            let date = try unbox(value, as: Date.self)
+            return date as! T
+        }
+        
+        if T.self == URL.self || T.self == NSURL.self {
+            let url = try unbox(value, as: URL.self)
+            return url as! T
+        }
+        
+        if T.self == Decimal.self || T.self == NSDecimalNumber.self {
+            let decimal = try unbox(value, as: Decimal.self)
+            return decimal as! T
+        }
+        
         do {
             return try unboxRawType(value, as: T.self)
         } catch {
@@ -51,6 +70,93 @@ open class DictionaryDecoder: Decoder {
             defer { _ = storage.popContainer() }
             return try T(from: self)
         }
+    }
+    
+    private func unbox(_ value: Any, as type: Date.Type) throws -> Date {
+        
+        guard !(value is NSNull) else {
+            let description = "Expected \(type) but found nil value instead."
+            let error = DecodingError.valueNotFound(Date.self, DecodingError.Context(codingPath: codingPath, debugDescription: description))
+            throw error
+        }
+        
+        if let date = value as? Date {
+            return date
+        }
+        
+        switch dateDecodingStrategy {
+        case .deferredToDate:
+            self.storage.push(container: value)
+            defer { self.storage.popContainer() }
+            return try Date(from: self)
+        case .secondsSince1970:
+            let double = try self.unbox(value, as: Double.self)
+            return Date(timeIntervalSince1970: double)
+        case .millisecondsSince1970:
+            let double = try self.unbox(value, as: Double.self)
+            return Date(timeIntervalSince1970: double / 1000.0)
+        case .iso8601:
+            if #available(macOS 10.12, iOS 10.0, watchOS 3.0, tvOS 10.0, *) {
+                let string = try self.unbox(value, as: String.self)
+                guard let date = _iso8601Formatter.date(from: string) else {
+                    throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: self.codingPath, debugDescription: "Expected date string to be ISO8601-formatted."))
+                }
+                
+                return date
+            } else {
+                fatalError("ISO8601DateFormatter is unavailable on this platform.")
+            }
+            
+        case .formatted(let formatter):
+            let string = try self.unbox(value, as: String.self)
+            guard let date = formatter.date(from: string) else {
+                throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: self.codingPath, debugDescription: "Date string does not match format expected by formatter."))
+            }
+            
+            return date
+            
+        case .custom(let closure):
+            self.storage.push(container: value)
+            defer { self.storage.popContainer() }
+            return try closure(self)
+        }
+    }
+    
+    private func unbox(_ value: Any, as type: URL.Type) throws -> URL {
+        
+        guard !(value is NSNull) else {
+            let description = "Expected \(type) but found nil value instead."
+            let error = DecodingError.valueNotFound(Date.self, DecodingError.Context(codingPath: codingPath, debugDescription: description))
+            throw error
+        }
+        
+        if let url = value as? URL {
+            return url
+        }
+        
+        let urlString = try unbox(value, as: String.self)
+        guard let url = URL(string: urlString) else {
+            throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: self.codingPath,
+                                                                    debugDescription: "Invalid URL string."))
+        }
+        
+        return url
+    }
+    
+    private func unbox(_ value: Any, as type: Decimal.Type) throws -> Decimal {
+        
+        guard !(value is NSNull) else {
+            let description = "Expected \(type) but found nil value instead."
+            let error = DecodingError.valueNotFound(Date.self, DecodingError.Context(codingPath: codingPath, debugDescription: description))
+            throw error
+        }
+
+        if let decimal = value as? Decimal {
+            return decimal
+        }
+        
+        let doubleValue = try unbox(value, as: Double.self)
+        return Decimal(doubleValue)
     }
 
     private func lastContainer<T>(forType type: T.Type) throws -> Any {
@@ -291,5 +397,30 @@ extension DictionaryDecoder {
             let container = try decoder.lastContainer(forType: type)
             return try decoder.unbox(container, as: T.self)
         }
+    }
+}
+
+public extension DictionaryDecoder {
+    
+    /// The strategy to use for decoding `Date` values.
+    enum DateDecodingStrategy {
+        /// Defer to `Date` for decoding. This is the default strategy.
+        case deferredToDate
+        
+        /// Decode the `Date` as a UNIX timestamp from a JSON number.
+        case secondsSince1970
+        
+        /// Decode the `Date` as UNIX millisecond timestamp from a JSON number.
+        case millisecondsSince1970
+        
+        /// Decode the `Date` as an ISO-8601-formatted string (in RFC 3339 format).
+        @available(macOS 10.12, iOS 10.0, watchOS 3.0, tvOS 10.0, *)
+        case iso8601
+        
+        /// Decode the `Date` as a string parsed by the given formatter.
+        case formatted(DateFormatter)
+        
+        /// Decode the `Date` as a custom value decoded by the given closure.
+        case custom((_ decoder: Decoder) throws -> Date)
     }
 }
