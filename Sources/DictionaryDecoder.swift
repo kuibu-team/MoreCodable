@@ -126,7 +126,7 @@ open class DictionaryDecoder: Decoder {
         
         guard !(value is NSNull) else {
             let description = "Expected \(type) but found nil value instead."
-            let error = DecodingError.valueNotFound(Date.self, DecodingError.Context(codingPath: codingPath, debugDescription: description))
+            let error = DecodingError.valueNotFound(URL.self, DecodingError.Context(codingPath: codingPath, debugDescription: description))
             throw error
         }
         
@@ -135,6 +135,12 @@ open class DictionaryDecoder: Decoder {
         }
         
         let urlString = try unbox(value, as: String.self)
+        
+        guard urlString.count > 0 else {
+            let description = "Expected \(type) but found \"\" instead."
+            throw DecodingError.valueNotFound(URL.self, DecodingError.Context(codingPath: codingPath, debugDescription: description))
+        }
+        
         guard let url = URL(string: urlString) else {
             throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: self.codingPath,
                                                                     debugDescription: "Invalid URL string."))
@@ -207,7 +213,9 @@ extension DictionaryDecoder {
         }
 
         func decodeNil(forKey key: Key) throws -> Bool {
+            print("----> \(#function) - \(key)")
             guard let entry = self.container[key.stringValue] else {
+                print("----> key not found")
                 throw decoder.notFound(key: key)
             }
 

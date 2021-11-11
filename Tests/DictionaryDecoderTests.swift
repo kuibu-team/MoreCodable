@@ -9,6 +9,10 @@
 import XCTest
 @testable import MoreCodable
 
+extension Optional where Wrapped == URL {
+    
+}
+
 class DictionaryDecoderTests: XCTestCase {
 
     var decoder = DictionaryDecoder()
@@ -88,11 +92,46 @@ class DictionaryDecoderTests: XCTestCase {
             var name: String
             var age: Int
             var homePage: URL?
+            
+//            init(name: String, age: Int, homePage: URL?) {
+//                self.name = name
+//                self.age = age
+//                self.homePage = homePage
+//            }
+//
+//            enum CodingKeys: String, CodingKey {
+//                case name
+//                case age
+//                case homePage
+//            }
+//
+//            init(from decoder: Decoder) throws {
+//                let container = try decoder.container(keyedBy: CodingKeys.self)
+//                self.name     = try container.decode(String.self, forKey: .name)
+//                self.age      = try container.decode(Int.self, forKey: .age)
+//
+//                do {
+//                    self.homePage = try container.decode(URL?.self, forKey: .homePage)
+//                } catch DecodingError.keyNotFound, DecodingError.valueNotFound {
+//                    self.homePage = nil
+//                } catch {
+//                    throw error
+//                }
+//            }
+//
+//            func encode(to encoder: Encoder) throws {
+//                var container = encoder.container(keyedBy: CodingKeys.self)
+//                try container.encode(self.name, forKey: .name)
+//                try container.encode(self.age, forKey: .age)
+//                try container.encode(self.homePage, forKey: .homePage)
+//            }
         }
-        
+                        
         XCTAssertEqual(try decoder.decode(Person.self, from: ["name": "张三", "age": 18, "homePage": "https://www.baidu.com"]), Person(name: "张三", age: 18, homePage: URL(string: "https://www.baidu.com")!))
+        XCTAssertEqual(try decoder.decode(Person.self, from: ["name": "张三", "age": 18]), Person(name: "张三", age: 18, homePage: nil))
+        XCTAssertEqual(try decoder.decode(Person.self, from: ["name": "张三", "age": 18, "homePage": NSNull()]), Person(name: "张三", age: 18, homePage: nil))
         
-        XCTAssertEqual(try decoder.decode(Person.self, from: ["name": "张三", "age": 18]), Person(name: "张三", age: 18, homePage: nil))        
+//        XCTAssertEqual(try decoder.decode(Person.self, from: ["name": "张三", "age": 18, "homePage": ""]), Person(name: "张三", age: 18, homePage: nil))
     }
     
     func testDecimalValues() throws {
